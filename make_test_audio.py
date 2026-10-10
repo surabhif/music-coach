@@ -1,4 +1,5 @@
 """Synthesize an expert 'song' (formant voice + chords + drums) and user variants."""
+import os
 import numpy as np, soundfile as sf
 from voice_synth import sing, melody_traj, SR
 mel = [60,62,64,65,67,67,69,67,65,64,62,60, None, 64,65,67,72,71,69,67,65,64,62,60,60]
@@ -19,6 +20,7 @@ def song(notes, a=amps, **kw):
     y = v + backing(len(v)); return np.stack([y, y], 1) / np.abs(y).max() * 0.9
 flat = [0.8] * len(amps)
 if __name__ == "__main__":
+    os.makedirs("experts", exist_ok=True)
     sf.write("experts/demo_expert.wav", song(mel), SR)
     sf.write("test_user_identical.wav", song(mel), SR)
     sf.write("test_user_slightly_off.wav", song(mel, detune=25, tempo=1.05, jitter=.1, seed=1), SR)
