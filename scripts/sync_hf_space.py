@@ -71,9 +71,20 @@ def _stage(staging: Path) -> None:
     readme = (staging / "README.md").read_text(encoding="utf-8")
     if not readme.lstrip().startswith("---"):
         raise RuntimeError("README.md missing YAML frontmatter required by Gradio Spaces")
+    yaml_block = readme.split("---", 2)[1]
     for key in ("sdk: gradio", "app_file: gradio_app.py"):
-        if key not in readme.split("---", 2)[1]:
+        if key not in yaml_block:
             raise RuntimeError(f"README YAML must include `{key}`")
+    # HF validate-yaml only allows these thumbnail colors (not e.g. "rose").
+    allowed = {"red", "yellow", "green", "blue", "indigo", "purple", "pink", "gray"}
+    for field in ("colorFrom", "colorTo"):
+        for line in yaml_block.splitlines():
+            if line.strip().startswith(f"{field}:"):
+                val = line.split(":", 1)[1].strip().strip("\"'")
+                if val not in allowed:
+                    raise RuntimeError(
+                        f"README YAML {field}={val!r} invalid; must be one of {sorted(allowed)}"
+                    )
 
 
 def _report_runtime(api, repo_id: str) -> None:

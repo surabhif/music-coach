@@ -1,7 +1,7 @@
 ---
 title: VocalMatch
 emoji: 🎤
-colorFrom: rose
+colorFrom: pink
 colorTo: indigo
 sdk: gradio
 sdk_version: 5.42.0
