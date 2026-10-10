@@ -22,27 +22,42 @@ WEIGHTS = dict(pitch_score=.35, timing_score=.15, voicing_score=.10, steadiness_
 def _hash(path):
     return hashlib.md5(open(path, "rb").read()).hexdigest()[:16]
 
-# ---------------------------------------------------------------- separation & features
-def separate_vocals(path, want_accomp=False):
-    """htdemucs; writes cache/<hash>_vocals.wav and _accomp.wav (sum of non-vocal stems)."""
+def resolve_device(device=None):
+    """Prefer CUDA when available (ZeroGPU / local GPU); otherwise CPU."""
+    if device: return device
+    if os.environ.get("VOCALMATCH_FORCE_CPU") == "1": return "cpu"
+    return "cuda" if torch.cuda.is_available() else "cpu"
+
+def get_demucs_model():
+    """Lazy-load htdemucs. On ZeroGPU, place on cuda at init (emulation outside @spaces.GPU)."""
     global _model
+    if _model is None:
+        from demucs.pretrained import get_model
+        _model = get_model("htdemucs"); _model.eval()
+        if resolve_device() == "cuda":
+            try: _model.cuda()
+            except Exception: pass
+    return _model
+
+# ---------------------------------------------------------------- separation & features
+def separate_vocals(path, want_accomp=False, device=None):
+    """htdemucs; writes cache/<hash>_vocals.wav and _accomp.wav (sum of non-vocal stems)."""
     h = _hash(path); out = os.path.join(CACHE, h + "_vocals.wav"); acc = os.path.join(CACHE, h + "_accomp.wav")
     if os.path.exists(out) and (os.path.exists(acc) or not want_accomp):
         return (out, acc) if want_accomp else out
-    from demucs.pretrained import get_model
     from demucs.apply import apply_model
-    if _model is None:
-        _model = get_model("htdemucs"); _model.eval()
-    y, _ = librosa.load(path, sr=_model.samplerate, mono=False)
+    model = get_demucs_model()
+    device = resolve_device(device)
+    y, _ = librosa.load(path, sr=model.samplerate, mono=False)
     if y.ndim == 1: y = np.stack([y, y])
     wav = torch.tensor(y[:2], dtype=torch.float32)
     ref = wav.mean(0); wav = (wav - ref.mean()) / (ref.std() + 1e-8)
     with torch.no_grad():
-        src = apply_model(_model, wav[None], device="cpu", split=True, overlap=0.25, progress=False)[0]
-    src = src * ref.std() + ref.mean()
-    vi = _model.sources.index("vocals")
-    sf.write(out, src[vi].numpy().T, _model.samplerate)
-    sf.write(acc, sum(src[i] for i in range(len(_model.sources)) if i != vi).numpy().T, _model.samplerate)
+        src = apply_model(model, wav[None], device=device, split=True, overlap=0.25, progress=False)[0]
+    src = (src * ref.std() + ref.mean()).detach().cpu()
+    vi = model.sources.index("vocals")
+    sf.write(out, src[vi].numpy().T, model.samplerate)
+    sf.write(acc, sum(src[i] for i in range(len(model.sources)) if i != vi).numpy().T, model.samplerate)
     return (out, acc) if want_accomp else out
 
 def pitch_contour(vocals_path):
@@ -181,10 +196,10 @@ def expert_sections(expert_path):
 
 # ---------------------------------------------------------------- comparison
 def compare(user_path, expert_path, out_png, key_tolerant=True, separate=True, mode="western",
-            sa=None, raga=None, section=None):
+            sa=None, raga=None, section=None, device=None):
     """section=(start_s, end_s) on the expert; the user recording is assumed to cover just that section."""
-    uv = separate_vocals(user_path) if separate else user_path
-    ev = separate_vocals(expert_path) if separate else expert_path
+    uv = separate_vocals(user_path, device=device) if separate else user_path
+    ev = separate_vocals(expert_path, device=device) if separate else expert_path
     tu, mu, ru = pitch_contour(uv); te, me, re_ = pitch_contour(ev)
     warnings = []
     if separate:

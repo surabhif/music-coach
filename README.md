@@ -3,8 +3,10 @@ title: VocalMatch
 emoji: 🎤
 colorFrom: rose
 colorTo: indigo
-sdk: docker
-app_port: 7860
+sdk: gradio
+sdk_version: 5.42.0
+app_file: gradio_app.py
+python_version: "3.12"
 pinned: false
 ---
 
@@ -12,9 +14,14 @@ pinned: false
 
 Score how closely your singing matches an expert recording of the same song.
 
-VocalMatch isolates vocals (Demucs `htdemucs` on CPU), tracks pitch (librosa pYIN), aligns with DTW, and returns pitch / timing / voice metrics plus note-by-note feedback. It includes an in-browser practice studio, section scoring, Indian classical / raga mode, and SQLite progress history.
+VocalMatch isolates vocals (Demucs `htdemucs`), tracks pitch (librosa pYIN), aligns with DTW, and returns pitch / timing / voice metrics plus note-by-note feedback. Two front ends share `analysis.py`:
 
-> **GitHub Pages cannot host this app** — it needs a Python process, ffmpeg, and several GB of RAM for Demucs. Deploy with **Docker** (Hugging Face Spaces or Render) as described below.
+| Front end | Entry | Best for |
+| --- | --- | --- |
+| **Gradio** (HF Space) | `gradio_app.py` | Free **ZeroGPU** Spaces |
+| **Flask** (full UI) | `app.py` | Local / Docker / Render |
+
+> **GitHub Pages cannot host this app.** Docker Spaces are **paid** on some HF accounts; the free path is a **Gradio** Space on **ZeroGPU** hardware (CPU Basic may be disabled).
 
 ## Screenshots
 
@@ -26,51 +33,57 @@ VocalMatch isolates vocals (Demucs `htdemucs` on CPU), tracks pitch (librosa pYI
 | --- | --- | --- |
 | ![Notes](screens/notes.png) | ![Indian](screens/indian.png) | ![Progress](screens/progress.png) |
 
-More: `screens/section.png`, `screens/results_key.png`, `screens/results_mobile.png`, `screens/loading.png`, `screens/results_full.png`.
-
 ## Features
 
 - **Compare** — upload or record against a library track (`experts/`)
 - **Key-tolerant scoring** — global transposition search (default on)
 - **Note-by-note feedback** — good / sharp / flat / early / late / missed
-- **Practice studio** (`/studio`) — waveform, sections, loop, accompaniment, count-in recording
-- **Indian classical mode** — Sa detect, sargam labels, ragas (Yaman, Bhairav, Bhupali, Desh, Kafi, Bilawal), meend/gamak leniency
+- **Gradio Space** — microphone recording, Plotly pitch chart, isolated vocals
+- **Flask practice studio** (`/studio`) — waveform, sections, loop, accompaniment, count-in
+- **Indian classical mode** — Sa detect, sargam labels, ragas (Yaman, Bhairav, Bhupali, Desh, Kafi, Bilawal)
 - **Voice metrics** — steadiness, vibrato, phrasing, dynamics
-- **Progress** (`/history`) — SQLite attempt history per singer / song
+- **Progress** (`/history`, Flask) — SQLite attempt history
 
-## Requirements
+## Requirements & ZeroGPU constraints
 
-- Python **3.11+**
-- **ffmpeg** on `PATH` (browser recordings → WAV)
-- **librosa**, **demucs**, **CPU PyTorch**, Flask, gunicorn (see `requirements.txt`)
-- **RAM**: plan on **≥4 GB** available for Demucs (8 GB preferred). First separation downloads the `htdemucs` weights (~80 MB) and caches stems under `cache/`.
+| Constraint | Guidance |
+| --- | --- |
+| **Python** | ZeroGPU supports **3.10.13** and **3.12.12** (Space YAML uses `python_version: "3.12"`) |
+| **Gradio** | **4+** (this repo pins **5.42.0**) |
+| **PyTorch** | ZeroGPU needs **≥ 2.8.0** (see [ZeroGPU docs](https://huggingface.co/docs/hub/spaces-zerogpu)); do **not** pin 2.4.x |
+| **GPU decorator** | Demucs runs under `@spaces.GPU(duration=180)`; decorator is a no-op off ZeroGPU / CPU fallback |
+| **Quota** | Default GPU slice is 60s; we request **180s** for cold Demucs. Free accounts get limited daily ZeroGPU minutes |
+| **ffmpeg** | Listed in `packages.txt` for Spaces; install locally via apt |
 
-Typical processing time on a 4-core CPU for a short demo clip (~10–15 s of audio): **30–90 s** cold (model load + separation); **5–20 s** after stems are cached. Longer songs scale roughly with duration.
+**RAM / time (CPU local or Docker):** ≥4 GB (8 GB preferred). Short demo (~10–15 s): **30–90 s** cold, **5–20 s** cached. On ZeroGPU, separation is much faster once the GPU is granted (queue + quota still apply).
 
 ## Local setup
 
 ```bash
-# System packages (Debian/Ubuntu)
 sudo apt-get update && sudo apt-get install -y ffmpeg libsndfile1
 
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -U pip
+# CPU torch first (satisfies the torch>=2.8 pin without pulling CUDA wheels)
+pip install torch==2.8.0 torchaudio==2.8.0 --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 
-# Optional: regenerate synthetic experts + test users (also overwrites demo experts)
-python make_test_audio.py
+python make_test_audio.py   # optional; regenerates experts + test_user_*.wav
 
-# Dev server (PORT defaults to 7860)
+# Flask (full UI)
 python app.py
+# → http://localhost:7860
+
+# Gradio (Space entrypoint)
+python gradio_app.py
 # → http://localhost:7860
 ```
 
-Production-style local run:
+Production Flask:
 
 ```bash
-export PORT=7860
-export VOCALMATCH_DATA="$(pwd)/data"   # uploads, results, cache, vocalmatch.db
+export PORT=7860 VOCALMATCH_DATA="$(pwd)/data" VOCALMATCH_FORCE_CPU=1
 mkdir -p "$VOCALMATCH_DATA"
 gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 600 app:app
 ```
@@ -79,94 +92,101 @@ gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 600 app:app
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `7860` | HTTP port (gunicorn / Flask) |
-| `VOCALMATCH_DATA` | app directory | Writable dir for `uploads/`, `results/`, `cache/`, `vocalmatch.db` |
-| `VOCALMATCH_EXPERTS` | `./experts` | Expert library (shipped demo tracks live here) |
-| `TORCH_HOME` | torch default | Where PyTorch / Demucs weights are cached |
+| `PORT` | `7860` | HTTP port |
+| `VOCALMATCH_DATA` | app directory | `uploads/`, `results/`, `cache/`, `vocalmatch.db` |
+| `VOCALMATCH_EXPERTS` | `./experts` | Expert library |
+| `VOCALMATCH_FORCE_CPU` | unset | Force Demucs on CPU (set in Docker) |
+| `TORCH_HOME` | torch default | Weight cache |
 
 ### Tests
 
 ```bash
-python make_test_audio.py   # creates test_user_*.wav (gitignored) + experts/*.wav
-python test_e2e.py
-python test_indian.py
-python test_sections.py
+python make_test_audio.py
+python test_e2e.py && python test_indian.py && python test_sections.py
 ```
 
-CI runs the same suite via `.github/workflows/test.yml`.
+## Deploy to Hugging Face (Gradio + ZeroGPU) — recommended free path
 
-### Demo experts
+**Space (already created):** [huggingface.co/spaces/surabhif/music-coach](https://huggingface.co/spaces/surabhif/music-coach)  
+**Space id:** `surabhif/music-coach` · **Hardware:** ZeroGPU · **SDK:** Gradio
 
-Shipped under `experts/`:
+### 1. Space settings to confirm
 
-- `demo_expert.wav` — short western-style demo mix
-- `yaman_expert.wav` — Raga Yaman demo
+In the Space settings, keep:
 
-Large `test_user_*.wav` files are **not** committed; regenerate with `make_test_audio.py`.
+- **SDK:** Gradio (not Docker)
+- **Hardware:** **ZeroGPU**
+- README frontmatter at the top of this file:
 
-## Deploy
+```yaml
+sdk: gradio
+sdk_version: 5.42.0
+app_file: gradio_app.py
+python_version: "3.12"
+```
 
-### Option A — Hugging Face Spaces (Docker) — recommended free/cheap host
+`packages.txt` installs **ffmpeg**. Demucs runs under `@spaces.GPU(duration=180)` in `gradio_app.py`.
 
-HF Spaces free **CPU** machines have enough RAM for Demucs on short clips. GitHub Pages cannot run this stack; Spaces can.
+### 2. Get this code into the Space
 
-1. Create a Space at [huggingface.co/new-space](https://huggingface.co/new-space)
-   - **SDK**: Docker  
-   - **Hardware**: CPU basic (upgrade if you OOM on longer songs)  
-   - Visibility: public or private
-2. Connect this GitHub repo (Space settings → **Repository** / sync from GitHub), **or** push the repo contents to the Space git remote.
-3. Ensure the Space README keeps the YAML frontmatter at the top of this file (`sdk: docker`, `app_port: 7860`). The included `Dockerfile` installs ffmpeg, pins CPU torch, and starts gunicorn on `$PORT`.
-4. Wait for the build. First boot downloads Demucs weights into the container (or `/data` if you persist it).
-5. Open the Space URL and try **Compare** with `demo_expert.wav`.
+**Option A — push to the Space git remote**
 
-**Memory / time on Spaces**
+```bash
+git remote add space https://huggingface.co/spaces/surabhif/music-coach
+# or, if the remote already exists: git remote set-url space https://huggingface.co/spaces/surabhif/music-coach
+git fetch origin main
+git push space main:main
+# If the Space rejects a non-fast-forward history:
+#   git push space main:main --force
+```
 
-| Resource | Recommendation |
-| --- | --- |
-| RAM | Free CPU (~16 GB host share) OK for demos; upgrade if OOM |
-| CPU | 2+ vCPU; demucs is the bottleneck |
-| Disk | Persist `/data` if the platform allows (uploads, cache, DB) |
-| Timeout | Gunicorn `--timeout 600`; expect 30–90 s first compare |
+Use an HF access token with **Write** permission when prompted (or `huggingface-cli login`).
 
-Manual steps the owner must do: create the Space (or Render service), link the GitHub repo, and (optional) attach persistent storage for `/data` so caches and history survive rebuilds.
+**Option B — GitHub Action sync (this repo → Space)**
 
-### Option B — Render (Docker Blueprint)
+1. Create a fine-grained or classic HF token with **Write** access to `spaces/surabhif/music-coach`
+2. In GitHub → **Settings → Secrets and variables → Actions**, add:
+   - `HF_TOKEN` — that write token  
+   (Space id is fixed in the workflow as `surabhif/music-coach`; no `HF_SPACE` secret needed)
+3. The workflow [`.github/workflows/sync-hf-space.yml`](.github/workflows/sync-hf-space.yml) pushes `main` to the Space on each push to `main` (and via **Actions → sync-hf-space → Run workflow**).
+4. Merge to `main` (or run the workflow manually), then check the Action log and the [Space build](https://huggingface.co/spaces/surabhif/music-coach).
 
-`render.yaml` defines a Docker web service with a persistent disk at `/data`.
+### 3. Try it
 
-1. Go to [render.com](https://render.com) → **New** → **Blueprint** → connect `surabhif/music-coach`.
-2. Apply the Blueprint. Choose a plan with **≥2 GB RAM** (prefer **4–8 GB**). Free/starter (~512 MB) will OOM on Demucs.
-3. Deploy. Health check: `GET /healthz`.
-4. Open the `.onrender.com` URL and run a compare.
+Open [the Space](https://huggingface.co/spaces/surabhif/music-coach) → choose `demo_expert.wav` → upload or record → **Compare**. First run downloads Demucs weights and may wait in the ZeroGPU queue.
 
-Render injects `PORT`; the Dockerfile reads it. `VOCALMATCH_DATA=/data` keeps uploads, results, cache, and SQLite on the disk.
+## Other hosts (Flask Docker)
 
-### Option C — Any Docker host
+### Render
+
+`render.yaml` — use **≥2 GB RAM** (prefer 4–8 GB). Free/starter will OOM on Demucs.
+
+### Any Docker host
 
 ```bash
 docker build -t vocalmatch .
 docker run --rm -p 7860:7860 -v vocalmatch-data:/data -e PORT=7860 vocalmatch
 ```
 
+Self-hosted Docker still runs the **Flask** app via gunicorn. Gradio is for the HF Space entrypoint.
+
 ## Project layout
 
 ```
-app.py              Flask routes (compare, studio, history, healthz)
+gradio_app.py       Gradio UI (HF Space / ZeroGPU entry)
+app.py              Flask routes (local/Docker)
 analysis.py         Demucs → pYIN → DTW → scores / notes / plot
-db.py               SQLite progress
-paths.py            BASE / DATA / experts / cache paths
-voice_synth.py      Synthetic voice used by make_test_audio.py
-make_test_audio.py  Regenerates experts + test_user_*.wav
+packages.txt        apt packages for Gradio Spaces (ffmpeg)
+requirements.txt    Space-compatible pins (torch >= 2.8)
+Dockerfile          CPU Flask image (Render / self-host)
+.github/workflows/  tests + optional HF Space sync
 experts/            Demo expert tracks
-templates/          Jinja UI
-screens/            UI screenshots for docs
-Dockerfile          Production image (ffmpeg + gunicorn)
-render.yaml         Render Blueprint
-requirements.txt    Pinned deps (CPU torch via PyTorch wheel index)
+templates/          Flask Jinja UI
+screens/            Screenshots
 ```
 
 ## Scoring (summary)
 
-Pipeline: demucs vocal isolation (cached by file hash) → librosa pYIN → DTW on octave-invariant features → scores.
+Pipeline: demucs vocal isolation (cached by file hash) → librosa pYIN → DTW → scores.
 
-Weights (v3): pitch 35%, timing 15%, steadiness 10%, phrasing 10%, dynamics 10%, coverage 10%, vibrato 5%, micro-stability 5%. Key-tolerant mode searches pitch-class shifts and keeps the global integer shift with lowest median cents error.
+Weights: pitch 35%, timing 15%, steadiness 10%, phrasing 10%, dynamics 10%, coverage 10%, vibrato 5%, micro-stability 5%.

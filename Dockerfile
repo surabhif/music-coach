@@ -1,5 +1,5 @@
-# VocalMatch — Flask + demucs (CPU). Works on Hugging Face Spaces (Docker SDK) and any
-# host that runs Docker. Spaces expects the app on port 7860 by default.
+# VocalMatch — Flask + demucs (CPU Docker / Render). For free HF hosting use the
+# Gradio ZeroGPU Space entry (`gradio_app.py`); Docker Spaces are paid on some accounts.
 FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -9,7 +9,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     VOCALMATCH_DATA=/data \
     TORCH_HOME=/data/torch \
     NUMBA_CACHE_DIR=/tmp/numba_cache \
-    MPLCONFIGDIR=/tmp/matplotlib
+    MPLCONFIGDIR=/tmp/matplotlib \
+    VOCALMATCH_FORCE_CPU=1
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ffmpeg \
@@ -17,7 +18,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Hugging Face Spaces runs as uid 1000
 RUN useradd -m -u 1000 user \
     && mkdir -p /data /app \
     && chown -R user:user /data /app
@@ -25,7 +25,10 @@ RUN useradd -m -u 1000 user \
 WORKDIR /app
 
 COPY --chown=user:user requirements.txt .
+# CPU wheels first so the torch>=2.8 pin in requirements.txt is already satisfied.
 RUN pip install --upgrade pip \
+    && pip install --no-cache-dir torch==2.8.0 torchaudio==2.8.0 \
+        --index-url https://download.pytorch.org/whl/cpu \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY --chown=user:user . .
@@ -33,7 +36,6 @@ COPY --chown=user:user . .
 USER user
 EXPOSE 7860
 
-# Single worker: demucs + torch are memory-heavy. Long timeout for vocal isolation.
 CMD gunicorn \
     --bind 0.0.0.0:${PORT} \
     --workers 1 \
