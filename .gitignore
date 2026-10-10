@@ -1,0 +1,44 @@
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Runtime / generated data
+uploads/
+results/
+cache/
+separated/
+data/
+*.db
+*.log
+logs/
+
+# Regenerated test audio (use: python make_test_audio.py)
+test_user_*.wav
+/tmp/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~
+
+# Hugging Face / local secrets
+.env
+.env.*
+!.env.example

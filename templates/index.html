@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block css %}
+.drop{border:2px dashed #C7D2FE;background:#FAFAFF;border-radius:14px;padding:36px 20px;text-align:center;cursor:pointer;transition:.15s}
+.drop:hover,.drop.over{border-color:var(--brand);background:var(--soft)}.drop .ic{width:52px;height:52px;margin:0 auto 12px;border-radius:14px;background:#fff;display:grid;place-items:center;box-shadow:0 2px 8px rgba(99,102,241,.15)}
+.drop b{color:var(--brand)}.drop small{color:var(--muted);display:block;margin-top:6px}
+.file{display:none;align-items:center;gap:12px;margin-top:14px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fff}
+.file.show{display:flex}.file .n{font-weight:600;font-size:14px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.file .z{color:var(--muted);font-size:13px}
+.experts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.ex{position:relative}.ex input{position:absolute;opacity:0}.ex label{display:flex;gap:12px;align-items:center;padding:14px;border:1.5px solid var(--line);border-radius:12px;cursor:pointer;transition:.15s;background:#fff}
+.ex label:hover{border-color:#C7D2FE}.ex input:checked+label{border-color:var(--brand);background:var(--soft);box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+.ex .av{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#E0E7FF,#EDE9FE);display:grid;place-items:center;flex:none}
+.ex .t{font-weight:600;font-size:14px}.ex .m{color:var(--muted);font-size:12px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+.toggle{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--muted);cursor:pointer}.toggle input{width:18px;height:18px;accent-color:var(--brand)}
+.how li{margin-bottom:14px;color:var(--muted);font-size:14px;line-height:1.5}.how b{color:var(--ink)}
+{% endblock %}
+{% block body %}
+<div class="wrap">
+<section class="hero"><div class="pill">AI VOCAL COACH</div><h1>How close is your voice<br>to the pros?</h1>
+<p>Upload your take of a song. VocalMatch isolates the vocals, traces every note, and scores your pitch, timing and stability against an expert recording.</p></section>
+{% if msg %}<div class="toast">✓ {{msg}}</div>{% endif %}
+<div class="grid g2">
+<form class="card" id="cmp" method="post" action="/compare" enctype="multipart/form-data">
+ <h2><span class="step">1</span>Upload your recording</h2><p class="sub">Your full song with backing music is fine. We separate the vocals automatically.</p>
+ <div class="drop" id="drop"><div class="ic"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366F1" stroke-width="2" stroke-linecap="round"><path d="M12 16V4m0 0L7 9m5-5 5 5M4 17v2a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2"/></svg></div>
+ <div><b>Click to upload</b> or drag and drop</div><small>WAV, MP3, FLAC, OGG, M4A · up to 200 MB</small>
+ <input type="file" name="user" id="user" accept="audio/*,.wav,.mp3,.flac,.ogg,.m4a,.aac" hidden required></div>
+ <div class="file" id="fileinfo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#6366F1" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg><span class="n" id="fname"></span><span class="z" id="fsize"></span></div>
+ <h2 style="margin-top:28px"><span class="step">2</span>Choose an expert track</h2><p class="sub">The reference performance to compare against.</p>
+ <div class="experts">{% for e in experts %}<div class="ex"><input type="radio" name="expert" id="e{{loop.index}}" value="{{e.file}}" {% if loop.first %}checked{% endif %}>
+ <label for="e{{loop.index}}"><div class="av"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6366F1" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg></div><div><div class="t">{{e.title}}</div><div class="m">{{e.file}} · {{e.size}}</div></div></label></div>
+ {% else %}<p class="sub">No expert tracks yet. Add one in the library →</p>{% endfor %}</div>
+ <h2 style="margin-top:28px"><span class="step">3</span>Options</h2><p class="sub">Who's singing, and how to score it.</p>
+ {% set sfx = "" %}{% include "_options.html" %}
+ <div class="row"><a href="/studio" style="font-size:14px;font-weight:600">🎙 Prefer to record in the browser or practise a section? Open the Practice studio →</a>
+ <button class="btn btn-primary" id="go" disabled>Analyze my singing →</button></div>
+</form>
+<div class="grid" style="align-content:start">
+ <div class="card" id="library"><h2>Expert library</h2><p class="sub">{{experts|length}} track{{'' if experts|length==1 else 's'}} available. Add a new reference recording.</p>
+ <form method="post" action="/expert" enctype="multipart/form-data" style="display:flex;gap:10px;flex-wrap:wrap">
+ <label class="btn btn-ghost" style="flex:1;justify-content:center;overflow:hidden"><span id="exname">Choose file…</span><input type="file" name="file" hidden required accept="audio/*" onchange="exname.textContent=this.files[0]?.name||'Choose file…'"></label>
+ <button class="btn btn-primary">Add</button></form></div>
+ <div class="card how" id="how"><h2>How it works</h2><p class="sub">Four steps, fully automatic.</p><ol style="padding-left:18px;margin:0">
+ <li><b>Vocal isolation</b>: Demucs separates the voice from the instruments.</li>
+ <li><b>Pitch tracking</b>: every frame of the voice is mapped to a musical note.</li>
+ <li><b>Alignment</b>: dynamic time warping lines up your phrasing with the expert's.</li>
+ <li><b>Scoring</b>: pitch accuracy, timing, stability and coverage, combined into one score.</li></ol></div>
+</div></div></div>
+{% endblock %}
+{% block js %}<script>
+const drop=document.getElementById('drop'),inp=document.getElementById('user'),go=document.getElementById('go');
+const show=f=>{if(!f)return;fname.textContent=f.name;fsize.textContent=(f.size/1e6).toFixed(1)+' MB';fileinfo.classList.add('show');go.disabled=!document.querySelector('[name=expert]')};
+drop.onclick=()=>inp.click();inp.onchange=()=>show(inp.files[0]);
+['dragenter','dragover'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(e=>drop.addEventListener(e,ev=>{ev.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',ev=>{if(ev.dataTransfer.files.length){inp.files=ev.dataTransfer.files;show(inp.files[0])}});
+document.getElementById('cmp').onsubmit=()=>showLoading();
+</script>{% endblock %}
