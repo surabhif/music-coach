@@ -1,0 +1,22 @@
+# Render Blueprint — VocalMatch (Docker).
+# Free tier (~512 MB) is too small for demucs; use at least 2 GB RAM (prefer 4–8 GB).
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: vocalmatch
+    runtime: docker
+    plan: standard          # 2 GB RAM / 1 CPU — upgrade if demucs OOMs
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: VOCALMATCH_DATA
+        value: /data
+      - key: TORCH_HOME
+        value: /data/torch
+    disk:
+      name: vocalmatch-data
+      mountPath: /data
+      sizeGB: 10

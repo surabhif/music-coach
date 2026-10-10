@@ -1,0 +1,115 @@
+{% extends "base.html" %}{% block title %}Practice studio · VocalMatch{% endblock %}
+{% block css %}
+.wave{position:relative;height:140px;border-radius:12px;background:#FAFAFF;border:1px solid var(--line);cursor:crosshair;overflow:hidden;user-select:none}
+.wave canvas{width:100%;height:100%;display:block}.sel{position:absolute;top:0;bottom:0;background:rgba(99,102,241,.14);border-left:2px solid var(--brand);border-right:2px solid var(--brand);pointer-events:none;display:none}
+.head{position:absolute;top:0;bottom:0;width:2px;background:#0F172A;pointer-events:none;left:0}
+.chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.chip{border:1px solid var(--line);background:#fff;border-radius:99px;padding:7px 14px;font:600 13px Inter,system-ui;color:#334155;cursor:pointer}
+.chip:hover{border-color:#C7D2FE}.chip.on{background:var(--soft);border-color:var(--brand);color:#4338CA}
+.transport{display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap}.round{width:48px;height:48px;border-radius:50%;border:0;display:grid;place-items:center;cursor:pointer;background:#0F172A;color:#fff}
+.mono{font-variant-numeric:tabular-nums;color:var(--muted);font-size:14px}.selbox{margin-left:auto;font-size:13px;color:var(--muted);display:flex;gap:10px;align-items:center}
+.selbox b{color:var(--ink)}.toggle{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);cursor:pointer}.toggle input{width:18px;height:18px;accent-color:var(--brand)}
+.rec{display:grid;place-items:center;text-align:center;padding:28px 10px;border:1px dashed #C7D2FE;border-radius:14px;background:#FAFAFF;margin-top:14px}
+.recbtn{width:84px;height:84px;border-radius:50%;border:0;background:#F43F5E;cursor:pointer;box-shadow:0 0 0 8px #FFE4E6;display:grid;place-items:center;transition:.2s}
+.recbtn.on{animation:pulse 1.2s infinite;border-radius:24px}@keyframes pulse{50%{box-shadow:0 0 0 16px #FFE4E6}}
+.count{font-size:72px;font-weight:800;color:var(--brand);height:84px;line-height:84px;display:none}
+.meter{width:240px;height:8px;background:#F1F5F9;border-radius:99px;overflow:hidden;margin-top:16px}.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,#10B981,#F59E0B,#F43F5E)}
+.take{display:none;margin-top:16px;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}
+.or{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:13px;margin:18px 0}.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
+.status{font-size:14px;color:var(--muted);margin-top:12px;min-height:20px}
+{% endblock %}
+{% block body %}
+<div class="wrap">
+<section class="hero" style="padding-bottom:20px"><div class="pill">PRACTICE STUDIO</div><h1 style="font-size:38px">Record, loop and drill any section</h1>
+<p>Pick a passage, loop it with the expert, then record your take straight from the browser with a backing track and count-in.</p></section>
+<form id="studio" class="grid" style="gap:20px" onsubmit="return false">
+<div class="card">
+ <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:end">
+  <div><h2><span class="step">1</span>Choose a song and section</h2><p class="sub" style="margin:0">Drag across the waveform to select, or pick an auto-detected section. Leave empty for the whole song.</p></div>
+  <label class="field" style="min-width:260px">Expert track<select class="input" name="expert" id="expert">{% for e in experts %}<option value="{{e.file}}" {% if e.file==sel %}selected{% endif %}>{{e.title}}</option>{% endfor %}</select></label>
+ </div>
+ <div class="wave" id="wave" style="margin-top:18px"><canvas id="cv"></canvas><div class="sel" id="selr"></div><div class="head" id="head"></div></div>
+ <div class="chips" id="chips"><span class="mono">Detecting sections…</span></div>
+ <div class="transport">
+  <button type="button" class="round" id="play" aria-label="Play"><svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M7 4v16l13-8z"/></svg></button>
+  <span class="mono" id="clock">0:00.0 / 0:00.0</span>
+  <label class="toggle"><input type="checkbox" id="loop" checked> Loop selection</label>
+  <div class="seg"><input type="radio" name="listen" id="l1" value="mix" checked><label for="l1">Full mix</label><input type="radio" name="listen" id="l2" value="accomp"><label for="l2">Backing only</label></div>
+  <div class="selbox">Selection <b id="selt">Whole song</b><button type="button" class="chip" id="clr">Clear</button></div>
+ </div>
+ <input type="hidden" name="sec_start" id="ss"><input type="hidden" name="sec_end" id="se">
+</div>
+<div class="grid g2">
+ <div class="card">
+  <h2><span class="step">2</span>Record your take</h2><p class="sub">The backing plays from the start of your selection after a count-in. Recording stops automatically at the end.</p>
+  <div class="tip"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B45309" stroke-width="2" style="flex:none"><path d="M3 14v-2a9 9 0 0 1 18 0v2"/><rect x="2" y="14" width="5" height="7" rx="2"/><rect x="17" y="14" width="5" height="7" rx="2"/></svg>
+  <div><b>Use headphones.</b> Otherwise the microphone picks up the backing track, which confuses vocal separation and pitch tracking.</div></div>
+  <div style="display:flex;gap:16px;margin-top:16px;flex-wrap:wrap">
+   <label class="field" style="flex:1">Backing during recording<select class="input" id="backing"><option value="accomp">Accompaniment only (vocals removed)</option><option value="mix">Full mix (with expert vocal)</option><option value="none">None (metronome count-in only)</option></select></label>
+   <label class="field" style="width:140px">Count-in<select class="input" id="beats"><option value="4">4 beats</option><option value="2">2 beats</option><option value="0">None</option></select></label>
+  </div>
+  <div class="rec"><div class="count" id="count">4</div>
+   <button type="button" class="recbtn" id="rec" aria-label="Record"><svg width="30" height="30" viewBox="0 0 24 24" fill="#fff"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3" stroke="#fff" stroke-width="2" fill="none"/></svg></button>
+   <div class="meter"><i id="lvl"></i></div><div class="status" id="rstat">Press to start (the browser will ask for microphone access)</div>
+   <div class="take" id="take"><audio controls id="takeaudio"></audio><button type="button" class="btn btn-ghost" id="redo">Re-record</button></div>
+  </div>
+  <div class="or">or upload a recording of this selection</div>
+  <input type="file" id="upfile" accept="audio/*" class="input">
+ </div>
+ <div class="card"><h2><span class="step">3</span>Options</h2><p class="sub">Who's singing, and how to score it.</p>
+  {% set sfx = "s" %}{% include "_options.html" %}
+  <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--line);display:flex;justify-content:flex-end"><button type="button" class="btn btn-primary" id="go" disabled>Analyze take →</button></div>
+ </div>
+</div></form></div>
+{% endblock %}
+{% block js %}<script>
+const $=id=>document.getElementById(id);let info=null,sel=null,blob=null,audio=new Audio(),playing=false;
+const fmt=s=>Math.floor(s/60)+':'+(s%60).toFixed(1).padStart(4,'0');
+function draw(){const c=$('cv'),r=c.getBoundingClientRect();c.width=r.width*devicePixelRatio;c.height=r.height*devicePixelRatio;const g=c.getContext('2d');g.scale(devicePixelRatio,devicePixelRatio);
+ if(!info)return;const n=info.peaks.length,w=r.width/n,h=r.height;
+ info.peaks.forEach((p,i)=>{const t=i/n*info.duration,ins=sel&&t>=sel[0]&&t<=sel[1];g.fillStyle=ins?'#6366F1':'#C7D2FE';const bh=Math.max(1,p*h*.86);g.fillRect(i*w,(h-bh)/2,Math.max(1,w-.5),bh)})}
+function setSel(s){sel=s&&s[1]-s[0]>0.5?s:null;const r=$('selr');if(sel){r.style.display='block';r.style.left=sel[0]/info.duration*100+'%';r.style.width=(sel[1]-sel[0])/info.duration*100+'%';
+ $('selt').textContent=fmt(sel[0])+' – '+fmt(sel[1]);$('ss').value=sel[0].toFixed(2);$('se').value=sel[1].toFixed(2)}else{r.style.display='none';$('selt').textContent='Whole song';$('ss').value=$('se').value=''}
+ document.querySelectorAll('#chips .chip').forEach(c=>c.classList.toggle('on',sel&&+c.dataset.s===sel[0]&&+c.dataset.e===sel[1]));draw()}
+async function load(){const ex=$('expert').value;sel=null;$('chips').innerHTML='<span class="mono">Detecting sections…</span>';
+ info=await (await fetch('/api/expert/'+encodeURIComponent(ex)+'?sections=0')).json();setSel(null);setSrc();
+ const full=await (await fetch('/api/expert/'+encodeURIComponent(ex))).json();info=full;
+ $('chips').innerHTML=full.sections.map(s=>`<button type="button" class="chip" data-s="${s.start}" data-e="${s.end}">${s.label} · ${fmt(s.start)}–${fmt(s.end)}</button>`).join('')+`<span class="mono" style="align-self:center">≈ ${Math.round(full.tempo)} BPM</span>`;
+ document.querySelectorAll('#chips .chip').forEach(c=>c.onclick=()=>{setSel([+c.dataset.s,+c.dataset.e]);audio.currentTime=sel[0]});draw()}
+function setSrc(kind){const ex=$('expert').value;kind=kind||document.querySelector('[name=listen]:checked').value;const t=audio.currentTime||0;audio.src='/expert_audio/'+encodeURIComponent(ex)+'/'+kind;audio.currentTime=t}
+$('expert').onchange=load;document.querySelectorAll('[name=listen]').forEach(r=>r.onchange=()=>{const p=!audio.paused;setSrc();if(p)audio.play()});
+let drag=null;const tAt=e=>{const r=$('wave').getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*info.duration};
+$('wave').onmousedown=e=>{drag=tAt(e)};window.onmousemove=e=>{if(drag!=null){const t=tAt(e);setSel([Math.min(drag,t),Math.max(drag,t)])}};
+window.onmouseup=e=>{if(drag!=null){const t=tAt(e);if(Math.abs(t-drag)<0.3){audio.currentTime=t;setSel(sel)}else audio.currentTime=sel[0];drag=null}};
+$('clr').onclick=()=>setSel(null);
+const pIcon=p=>$('play').innerHTML=p?'<svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>':'<svg width="18" height="18" viewBox="0 0 24 24" fill="#fff"><path d="M7 4v16l13-8z"/></svg>';
+$('play').onclick=()=>{if(audio.paused){if(sel&&(audio.currentTime<sel[0]||audio.currentTime>sel[1]))audio.currentTime=sel[0];audio.play()}else audio.pause()};
+audio.onplay=()=>pIcon(1);audio.onpause=()=>pIcon(0);
+function tick(){if(info){const t=audio.currentTime||0;$('head').style.left=t/info.duration*100+'%';$('clock').textContent=fmt(t)+' / '+fmt(info.duration);
+ if(sel&&!audio.paused&&t>=sel[1]){if(recState==='rec')stopRec();else if($('loop').checked)audio.currentTime=sel[0];else audio.pause()}}requestAnimationFrame(tick)}tick();
+window.onresize=draw;
+// ---------- recording
+let recState='idle',mr=null,chunks=[],stream=null,actx=null,an=null,timer=null,t0=0;
+const ready=()=>$('go').disabled=!(blob||$('upfile').files.length);
+function beep(at,hi){const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=hi?1320:880;g.gain.setValueAtTime(.3,at);g.gain.exponentialRampToValueAtTime(.001,at+.12);o.connect(g).connect(actx.destination);o.start(at);o.stop(at+.15)}
+async function startRec(){try{stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})}catch(e){$('rstat').textContent='Microphone unavailable: '+e.message;return}
+ actx=actx||new AudioContext();const src=actx.createMediaStreamSource(stream);an=actx.createAnalyser();an.fftSize=1024;src.connect(an);
+ const buf=new Uint8Array(an.fftSize);const meter=()=>{if(!an)return;an.getByteTimeDomainData(buf);let m=0;for(const v of buf)m=Math.max(m,Math.abs(v-128));$('lvl').style.width=Math.min(100,m/128*140)+'%';requestAnimationFrame(meter)};meter();
+ const n=+$('beats').value,bpm=info&&info.tempo?Math.max(60,Math.min(160,info.tempo)):90,iv=60/bpm,now=actx.currentTime+.1;
+ recState='count';$('rec').style.display='none';$('count').style.display='block';$('take').style.display='none';
+ for(let i=0;i<n;i++){beep(now+i*iv,i===0);setTimeout(()=>{$('count').textContent=n-i;$('rstat').textContent='Get ready…'},(.1+i*iv)*1000)}
+ setTimeout(()=>{const kind=$('backing').value;audio.pause();if(kind!=='none'){setSrc(kind)}audio.currentTime=sel?sel[0]:0;
+  chunks=[];mr=new MediaRecorder(stream);mr.ondataavailable=e=>chunks.push(e.data);mr.onstop=done;mr.start();if(kind!=='none'){audio.muted=false;audio.play()}
+  recState='rec';t0=performance.now();$('count').style.display='none';$('rec').style.display='grid';$('rec').classList.add('on');
+  timer=setInterval(()=>$('rstat').textContent='● Recording '+((performance.now()-t0)/1000).toFixed(1)+'s · press to stop',100);
+  if(kind==='none'){const len=sel?sel[1]-sel[0]:info.duration;setTimeout(()=>{if(recState==='rec')stopRec()},len*1000+500)}},(.1+n*iv)*1000)}
+function stopRec(){if(recState!=='rec')return;recState='idle';mr.stop();audio.pause();clearInterval(timer);$('rec').classList.remove('on');stream.getTracks().forEach(t=>t.stop());an=null;$('lvl').style.width=0;
+ setSrc(document.querySelector('[name=listen]:checked').value)}
+function done(){blob=new Blob(chunks,{type:mr.mimeType||'audio/webm'});$('takeaudio').src=URL.createObjectURL(blob);$('take').style.display='flex';
+ $('rstat').textContent='Take ready: '+((performance.now()-t0)/1000).toFixed(1)+'s recorded. Listen back, or analyze it.';$('upfile').value='';ready()}
+$('rec').onclick=()=>{if(recState==='idle')startRec();else if(recState==='rec')stopRec()};$('redo').onclick=()=>{blob=null;$('take').style.display='none';ready();startRec()};
+$('upfile').onchange=()=>{if($('upfile').files.length){blob=null;$('take').style.display='none';$('rstat').textContent='Using uploaded file: '+$('upfile').files[0].name}ready()};
+$('go').onclick=async()=>{const fd=new FormData($('studio'));fd.delete('listen');
+ if(blob){fd.append('user',blob,'recording.'+((blob.type.includes('ogg'))?'ogg':(blob.type.includes('mp4')?'m4a':'webm')));fd.append('recorded','1')}else fd.append('user',$('upfile').files[0]);
+ showLoading();const r=await fetch('/compare',{method:'POST',body:fd});if(r.ok)location=r.url;else{document.getElementById('ov').classList.remove('show');alert('Analysis failed: '+(await r.text()).slice(0,300))}};
+load();
+</script>{% endblock %}

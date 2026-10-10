@@ -1,0 +1,7 @@
+<div class="opts">
+ <label class="field">Singer name<input class="input" name="singer" placeholder="e.g. Priya" list="singers" maxlength="60"><datalist id="singers">{% for s in singers %}<option>{{s}}</option>{% endfor %}</datalist><small>Used for progress tracking</small></label>
+ <div class="field">Style<div class="seg"><input type="radio" name="mode" id="m-w{{sfx}}" value="western" checked><label for="m-w{{sfx}}">Western</label><input type="radio" name="mode" id="m-i{{sfx}}" value="indian"><label for="m-i{{sfx}}">Indian classical</label></div><small>Indian: sargam names, meend-friendly scoring</small></div>
+ <label class="field indian-only">Sa (tonic)<select class="input" name="sa"><option value="auto">Auto-detect</option>{% for n in notes %}<option value="{{loop.index0}}">{{n}}</option>{% endfor %}</select><small>Set if you know the expert's Sa</small></label>
+ <label class="field indian-only">Raga (optional)<select class="input" name="raga"><option value="">None</option>{% for r in ragas %}<option>{{r}}</option>{% endfor %}</select><small>Flags notes outside the raga</small></label>
+</div>
+<label class="toggle" style="margin-top:16px"><input type="checkbox" name="key_tolerant" checked> Key-tolerant (allow singing in a different key or octave)</label>

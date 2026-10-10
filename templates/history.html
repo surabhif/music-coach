@@ -1,0 +1,45 @@
+{% extends "base.html" %}{% block title %}Progress · VocalMatch{% endblock %}
+{% block css %}
+table{width:100%;border-collapse:collapse;font-size:14px}th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em;padding:10px 12px;border-bottom:1px solid var(--line)}
+td{padding:12px;border-bottom:1px solid #F1F5F9}tr:hover td{background:#FAFAFF}.sc{font-weight:700}
+.kpi .v{font-size:32px;font-weight:800;letter-spacing:-.03em}.kpi .l{color:var(--muted);font-size:13px;font-weight:500}.kpi .d{font-size:13px;font-weight:600;margin-top:4px}
+.up{color:#047857}.down{color:#BE123C}.filters{display:flex;gap:14px;flex-wrap:wrap;align-items:end}
+.b-great{background:#ECFDF5;color:#047857}.b-good{background:var(--soft);color:#4338CA}.b-fair{background:#FFFBEB;color:#B45309}.b-poor{background:#FFF1F2;color:#BE123C}
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-weight:600;font-size:12px}
+{% endblock %}
+{% block body %}
+<div class="wrap">
+<section class="hero" style="padding-bottom:20px"><div class="pill">PROGRESS</div><h1 style="font-size:38px">{{ singer ~ "'s progress" if singer else 'Progress tracking' }}</h1>
+<p>Every analysis is saved. Track your overall score and each skill over time, per song.</p></section>
+<form class="card filters" method="get" style="padding:20px">
+ <label class="field" style="min-width:220px">Singer<select class="input" name="singer" onchange="this.form.song.value='';this.form.submit()">{% for x in singers %}<option {% if x==singer %}selected{% endif %}>{{x}}</option>{% else %}<option>—</option>{% endfor %}</select></label>
+ <label class="field" style="min-width:260px">Song<select class="input" name="song" onchange="this.form.submit()"><option value="">All songs</option>{% for x in song_list %}<option {% if x==song %}selected{% endif %}>{{x}}</option>{% endfor %}</select></label>
+</form>
+{% if not rows %}<div class="card" style="margin-top:20px;text-align:center;padding:48px"><h2>No attempts yet</h2><p class="sub">Analyze a performance and it will show up here.</p><a class="btn btn-primary" href="/">Start a comparison</a></div>
+{% else %}
+{% set first = rows[0].overall %}{% set last = rows[-1].overall %}{% set best = rows|map(attribute='overall')|max %}
+<div class="grid g4" style="margin-top:20px">
+ <div class="card kpi"><div class="l">Attempts</div><div class="v">{{rows|length}}</div><div class="d" style="color:var(--muted)">{{ song_list|length }} song{{'' if song_list|length==1 else 's'}}</div></div>
+ <div class="card kpi"><div class="l">Latest score</div><div class="v">{{last|round|int}}</div><div class="d {{ 'up' if last>=first else 'down' }}">{{ '%+.1f'|format(last-first) }} since first attempt</div></div>
+ <div class="card kpi"><div class="l">Personal best</div><div class="v">{{best|round|int}}</div><div class="d" style="color:var(--muted)">{{ grade(best)[0] }}</div></div>
+ <div class="card kpi"><div class="l">Average</div><div class="v">{{ ((rows|sum(attribute='overall'))/rows|length)|round|int }}</div><div class="d" style="color:var(--muted)">across shown attempts</div></div>
+</div>
+<div class="grid g2" style="margin-top:20px;grid-template-columns:1fr 1fr">
+ <div class="card"><h2>Overall score over time</h2><p class="sub">One line per song.</p><div id="c1" style="height:320px"></div></div>
+ <div class="card"><h2>Skills over time</h2><p class="sub">{{ song or 'All songs' }}: click legend items to show or hide a skill.</p><div id="c2" style="height:320px"></div></div>
+</div>
+<div class="card" style="margin-top:20px;padding:12px 16px"><table><tr><th>Date</th><th>Song</th><th>Mode</th><th>Section</th><th>Overall</th><th>Pitch</th><th>Timing</th><th>Phrasing</th><th></th></tr>
+{% for r in rows|reverse %}{% set gg = grade(r.overall) %}<tr><td>{{ r.created.replace('T',' ')[:16] }}</td><td>{{ r.song }}</td><td>{{ 'Indian' if r.mode=='indian' else 'Western' }}</td>
+<td>{{ ('%.1f–%.1fs'|format(r.section[0], r.section[1])) if r.section else 'Full' }}</td><td><span class="badge b-{{gg[1]}}">{{ r.overall|round|int }}</span></td>
+<td>{{ r.scores.pitch_score|round|int }}</td><td>{{ r.scores.timing_score|round|int }}</td><td>{{ (r.scores.phrasing_score or 0)|round|int }}</td><td><a href="/result/{{r.rid}}">Report →</a></td></tr>{% endfor %}</table></div>
+{% endif %}</div>
+{% endblock %}
+{% block js %}{% if rows %}<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script><script>
+const R={{ rows|tojson }}, M={{ metrics|tojson }};
+const pal=['#6366F1','#10B981','#F59E0B','#F43F5E','#8B5CF6','#14B8A6','#0EA5E9','#64748B'];
+const ax={gridcolor:'#F1F5F9',zeroline:false,linecolor:'#E2E8F0',tickfont:{color:'#64748B'}};
+const L={font:{family:'Inter, system-ui',size:12},margin:{l:40,r:10,t:10,b:40},paper_bgcolor:'#fff',plot_bgcolor:'#fff',xaxis:{...ax,type:'date'},yaxis:{...ax,range:[0,105]},legend:{orientation:'h',y:-0.2},hovermode:'x unified'};
+const songs=[...new Set(R.map(r=>r.song))];
+Plotly.newPlot('c1',songs.map((s,i)=>{const rr=R.filter(r=>r.song===s);return{x:rr.map(r=>r.created),y:rr.map(r=>r.overall),name:s,mode:'lines+markers',line:{color:pal[i%8],width:3,shape:'spline'},marker:{size:8}}}),L,{displaylogo:false,responsive:true});
+Plotly.newPlot('c2',M.map((m,i)=>({x:R.map(r=>r.created),y:R.map(r=>r.scores[m[0]]??null),name:m[1],mode:'lines+markers',line:{color:pal[i%8],width:2,shape:'spline'},visible:i<4?true:'legendonly'})),L,{displaylogo:false,responsive:true});
+</script>{% endif %}{% endblock %}

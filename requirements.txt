@@ -1,0 +1,14 @@
+# CPU PyTorch (demucs). pip respects the extra index for torch/torchaudio wheels.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.4.1
+torchaudio==2.4.1
+Flask==3.0.3
+gunicorn==23.0.0
+Werkzeug==3.0.4
+numpy==1.26.4
+scipy==1.13.1
+librosa==0.10.2.post1
+soundfile==0.12.1
+matplotlib==3.9.2
+demucs==4.0.1
