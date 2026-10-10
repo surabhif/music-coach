@@ -129,27 +129,27 @@ python_version: "3.12"
 
 ### 2. Get this code into the Space
 
-**Option A — push to the Space git remote**
+HF rejects plain `git push` of binaries (`experts/*.wav`, screenshots). Sync with **`huggingface_hub`** (Xet storage) instead — that is what CI uses.
+
+**Option A — local upload (API / Xet)**
 
 ```bash
-git remote add space https://huggingface.co/spaces/surabhif/music-coach
-# or, if the remote already exists: git remote set-url space https://huggingface.co/spaces/surabhif/music-coach
-git fetch origin main
-git push space main:main
-# If the Space rejects a non-fast-forward history:
-#   git push space main:main --force
+pip install -U "huggingface_hub[hf_xet]"
+huggingface-cli login   # token with Write on spaces/surabhif/music-coach
+export HF_TOKEN=…       # or rely on the login cache
+python scripts/sync_hf_space.py
+# equivalent CLI sketch:
+#   hf upload surabhif/music-coach ./space-staging . --repo-type=space
 ```
 
-Use an HF access token with **Write** permission when prompted (or `huggingface-cli login`).
+`scripts/sync_hf_space.py` stages only what the Space needs (`gradio_app.py`, `analysis.py`, `paths.py`, `requirements.txt`, `packages.txt`, `README.md` with Gradio YAML, `experts/*.wav`) and skips Flask/Docker/docs extras (`screens/`, `.github/`, `templates/`, `app.py`, …).
 
 **Option B — GitHub Action sync (this repo → Space)**
 
 1. Create a fine-grained or classic HF token with **Write** access to `spaces/surabhif/music-coach`
-2. In GitHub → **Settings → Secrets and variables → Actions**, add:
-   - `HF_TOKEN` — that write token  
-   (Space id is fixed in the workflow as `surabhif/music-coach`; no `HF_SPACE` secret needed)
-3. The workflow [`.github/workflows/sync-hf-space.yml`](.github/workflows/sync-hf-space.yml) pushes `main` to the Space on each push to `main` (and via **Actions → sync-hf-space → Run workflow**).
-4. Merge to `main` (or run the workflow manually), then check the Action log and the [Space build](https://huggingface.co/spaces/surabhif/music-coach).
+2. In GitHub → **Settings → Secrets and variables → Actions**, add **`HF_TOKEN`**
+3. [`.github/workflows/sync-hf-space.yml`](.github/workflows/sync-hf-space.yml) runs `scripts/sync_hf_space.py` on each push to `main` (and via **Actions → sync-hf-space → Run workflow**). Space id is fixed as `surabhif/music-coach`.
+4. After a successful run, the Action prints Space runtime / card (`sdk`, `app_file`) from the HF API. Check the [Space](https://huggingface.co/spaces/surabhif/music-coach) build UI as well.
 
 ### 3. Try it
 
@@ -173,16 +173,17 @@ Self-hosted Docker still runs the **Flask** app via gunicorn. Gradio is for the 
 ## Project layout
 
 ```
-gradio_app.py       Gradio UI (HF Space / ZeroGPU entry)
-app.py              Flask routes (local/Docker)
-analysis.py         Demucs → pYIN → DTW → scores / notes / plot
-packages.txt        apt packages for Gradio Spaces (ffmpeg)
-requirements.txt    Space-compatible pins (torch >= 2.8)
-Dockerfile          CPU Flask image (Render / self-host)
-.github/workflows/  tests + optional HF Space sync
-experts/            Demo expert tracks
-templates/          Flask Jinja UI
-screens/            Screenshots
+gradio_app.py              Gradio UI (HF Space / ZeroGPU entry)
+app.py                     Flask routes (local/Docker)
+analysis.py                Demucs → pYIN → DTW → scores / notes / plot
+packages.txt               apt packages for Gradio Spaces (ffmpeg)
+requirements.txt           Space-compatible pins (torch >= 2.8)
+scripts/sync_hf_space.py   Upload Space subset via huggingface_hub (Xet)
+Dockerfile                 CPU Flask image (Render / self-host)
+.github/workflows/         tests + HF Space sync
+experts/                   Demo expert tracks (synced to Space)
+templates/                 Flask Jinja UI (not synced)
+screens/                   Screenshots (GitHub docs only; not synced)
 ```
 
 ## Scoring (summary)
