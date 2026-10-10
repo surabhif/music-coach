@@ -1,0 +1,45 @@
+# Push main → Hugging Face Gradio Space https://huggingface.co/spaces/surabhif/music-coach
+# Required secret: HF_TOKEN (Hugging Face write token for that Space)
+name: sync-hf-space
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  HF_SPACE: surabhif/music-coach
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check HF_TOKEN
+        id: creds
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          if [ -z "$HF_TOKEN" ]; then
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "Add repository secret HF_TOKEN (write access to spaces/surabhif/music-coach) to enable sync."
+          else
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.creds.outputs.has_token == 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Push to Hugging Face Space
+        if: steps.creds.outputs.has_token == 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote remove space 2>/dev/null || true
+          git remote add space "https://oauth2:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}"
+          # Space often has an unrelated initial commit — force-align to GitHub main
+          git push space "HEAD:main" --force
