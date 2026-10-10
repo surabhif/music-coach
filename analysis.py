@@ -332,6 +332,8 @@ def compare(user_path, expert_path, out_png, key_tolerant=True, separate=True, m
     return scores, uv, ev
 
 def _plot(t, a, b, err, lag, out_png, s, details):
+    # Tests write to gitignored results/; create parent so a clean checkout works.
+    os.makedirs(os.path.dirname(os.path.abspath(out_png)) or ".", exist_ok=True)
     J = lambda x: [None if not np.isfinite(v) else round(float(v), 3) for v in x]
     json.dump(dict(t=J(t), user=J(a), expert=J(b), err=J(err), lag=J(lag), **details), open(out_png[:-4] + ".json", "w"))
     plt.rcParams.update({"font.family": "DejaVu Sans", "axes.edgecolor": "#E2E8F0", "axes.labelcolor": "#475569",
