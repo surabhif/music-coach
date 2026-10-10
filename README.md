@@ -14,14 +14,7 @@ pinned: false
 
 Score how closely your singing matches an expert recording of the same song.
 
-VocalMatch isolates vocals (Demucs `htdemucs`), tracks pitch (librosa pYIN), aligns with DTW, and returns pitch / timing / voice metrics plus note-by-note feedback. Two front ends share `analysis.py`:
-
-| Front end | Entry | Best for |
-| --- | --- | --- |
-| **Gradio** (HF Space) | `gradio_app.py` | Free **ZeroGPU** Spaces |
-| **Flask** (full UI) | `app.py` | Local / Docker / Render |
-
-> **GitHub Pages cannot host this app.** Docker Spaces are **paid** on some HF accounts; the free path is a **Gradio** Space on **ZeroGPU** hardware (CPU Basic may be disabled).
+VocalMatch isolates vocals (Demucs `htdemucs`), tracks pitch (librosa pYIN), aligns with DTW, and returns pitch / timing / voice metrics plus note-by-note feedback.
 
 ## Screenshots
 
